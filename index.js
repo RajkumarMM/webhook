@@ -35,6 +35,7 @@ app.post('/webhook', async (req, res) => {
   try {
     const lead = req.body;
 
+    console.log('post/webhooks', lead);
     // const creds = JSON.parse(fs.readFileSync('./credentials.json'));
 
     const serviceAccountAuth = new JWT({
@@ -49,10 +50,10 @@ app.post('/webhook', async (req, res) => {
     const sheet = doc.sheetsByIndex[0]; // First sheet
 
     await sheet.addRow({
-      Name: lead.name || '',
-      Email: lead.email || '',
-      Phone: lead.phone || '',
-      Message: lead.message || '',
+      Name: lead.name || 'null',
+      Email: lead.email || 'null',
+      Phone: lead.phone || 'null',
+      Message: lead.message || 'null',
     });
 
     res.status(200).send({ success: true });
