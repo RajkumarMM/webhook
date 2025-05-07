@@ -3,6 +3,7 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import dotenv from 'dotenv';
 // import fs from 'fs';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -33,11 +34,30 @@ app.get('/webhook', (req, res) => {
 
 app.post('/webhook', async (req, res) => {
   try {
-    const lead = req.body;
+    console.log('📥 Facebook lead payload:', JSON.stringify(req.body, null, 2));
 
-    console.log('post/webhooks', lead);
-    // const creds = JSON.parse(fs.readFileSync('./credentials.json'));
+    const changes = req.body?.entry?.[0]?.changes?.[0];
+    const leadgenId = changes?.value?.leadgen_id;
+    const accessToken = process.env.PAGE_ACCESS_TOKEN;
 
+    if (!leadgenId || !accessToken) {
+      throw new Error('Missing leadgen_id or PAGE_ACCESS_TOKEN');
+    }
+
+    // Get lead info from Facebook Graph API
+    const response = await axios.get(`https://graph.facebook.com/v18.0/${leadgenId}?access_token=${accessToken}`);
+
+    const { field_data } = response.data;
+
+    // Extract fields
+    const data = {};
+    field_data.forEach(item => {
+      data[item.name] = item.values[0];
+    });
+
+    console.log('📋 Parsed lead data:', data);
+
+    // Store into Google Sheets
     const serviceAccountAuth = new JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
@@ -45,21 +65,19 @@ app.post('/webhook', async (req, res) => {
     });
 
     const doc = new GoogleSpreadsheet(process.env.SHEET_ID, serviceAccountAuth);
-
     await doc.loadInfo();
-    const sheet = doc.sheetsByIndex[0]; // First sheet
+    const sheet = doc.sheetsByIndex[0];
 
     await sheet.addRow({
-      Name: lead.name || 'null',
-      Email: lead.email || 'null',
-      Phone: lead.phone || 'null',
-      Message: lead.message || 'null',
+      Name: data.full_name || 'N/A',
+      Email: data.email || 'N/A',
+      Phone: data.phone_number || 'N/A',
     });
 
     res.status(200).send({ success: true });
-  } catch (error) {
-    console.error('❌ Error adding row:', error.message);
-    res.status(500).send({ success: false, error: error.message });
+  } catch (err) {
+    console.error('❌ Error processing webhook:', err.message);
+    res.status(500).send({ success: false, error: err.message });
   }
 });
 
