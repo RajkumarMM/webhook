@@ -2,7 +2,7 @@ import express from 'express';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import dotenv from 'dotenv';
-// import fs from 'fs';
+import fs from 'fs';
 import axios from 'axios';
 
 dotenv.config();
@@ -11,6 +11,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const VERIFY_TOKEN = 'my_secret_token';
 
+const logToFile = (message) => {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync('webhook.log', `[${timestamp}] ${message}\n`);
+};
 
 app.use(express.json());
 
@@ -20,7 +24,7 @@ app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
-
+  logToFile(`GET /webhook - mode: ${mode}, token: ${token}, challenge: ${challenge}`);
   console.log('🔍 GET /webhook', req.query);
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
@@ -34,6 +38,7 @@ app.get('/webhook', (req, res) => {
 
 app.post('/webhook', async (req, res) => {
   try {
+    logToFile(`POST /webhook - payload: ${JSON.stringify(req.body)}`);
     console.log('📥 Facebook lead payload:', JSON.stringify(req.body, null, 2));
 
     const changes = req.body?.entry?.[0]?.changes?.[0];
@@ -54,7 +59,7 @@ app.post('/webhook', async (req, res) => {
     field_data.forEach(item => {
       data[item.name] = item.values[0];
     });
-
+    logToFile(`Parsed lead data: ${JSON.stringify(data)}`);
     console.log('📋 Parsed lead data:', data);
 
     // Store into Google Sheets
